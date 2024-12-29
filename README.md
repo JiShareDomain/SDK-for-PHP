@@ -1,5 +1,3 @@
-# 重要：部分 SDK 和 API 未完成，请勿使用！
-
 # JiShareDomain SDK for PHP
 
 ## 简介
@@ -20,4 +18,8 @@ git clone https://github.com/JiShareDomain/SDK-for-PHP.git
 - 不要硬编码 API Key、API SafePassKey（SPK）和 API 地址，请使用环境变量或配置文件来存储这些敏感信息！
 - 请确保您的 API 地址是正确的，否则可能会导致 API 调用失败。
 - 请确保您的 API Key 和 API SafePassKey（SPK）是正确的，否则可能会导致 API 调用失败。
+- 默认API地址为：https://nic.lsdt.top/api
 
+## 感谢
+
+- 感谢 [KL DMS](https://github.com/klsf/kldns) 这是JSD DNS与JiShareDomain SDK的根基（因为Fork关系，所以感谢）

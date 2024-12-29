@@ -4,9 +4,9 @@ require_once 'JiShareDomainSDK.php';
 use JiShareDomain\JiShareDomainSDK;
 
 $sdk = new JiShareDomainSDK(
-    'xxxxx',//API Key
-    'xxxxx',//API SafePassKey（SPK）
-    '可为空，默认：https://nic.lsdt.top/api' // API地址
+    '421b1743b4ec001751a43985e7419126',//API Key
+    '4b082ef85a1db7d0da8926a4e0e7292f',//API SafePassKey（SPK）
+    'http://127.0.0.2:81/api' // API地址(示例使用的是本地API地址，请为空或替换实际API地址)
 );
 
 // 获取域名列表
