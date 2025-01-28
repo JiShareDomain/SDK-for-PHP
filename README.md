@@ -12,6 +12,7 @@ git clone https://github.com/JiShareDomain/SDK-for-PHP.git
 
 - 仅保留 JiShareDomainSDK.php 文件，并将其放置在您的项目目录中。
 - 如需要，可参考 HowUseSDK.md 文件中的示例代码（或以example-***.php为参考）。
+- SSO 为单独文档，请参考 HowLinkSSO.md 文件。（或以example-SSO***.php为参考）
 
 ## 注意事项
 

@@ -18,6 +18,24 @@ class JiShareDomainSDK
     }
     
     /**
+     * 获取API Key
+     * @return string
+     */
+    public function getApiKey()
+    {
+        return $this->apiKey;
+    }
+
+    /**
+     * 获取API URL
+     * @return string
+     */
+    public function getApiUrl()
+    {
+        return $this->apiUrl;
+    }
+    
+    /**
      * 获取可解析域名后缀列表
      * @param bool $rawResponse 是否返回原始JSON响应
      * @return array|string 
@@ -241,13 +259,20 @@ class JiShareDomainSDK
     
     private function generateSign($params)
     {
+        // 按键名对参数进行排序
         ksort($params);
+        
+        // 构建签名字符串
         $str = '';
-        foreach($params as $key => $value) {
-            $str .= $key . '=' . $value . '&';
+        foreach($params as $k => $v) {
+            if($k != 'sign' && $k != 'spk' && $v !== '' && $v !== null) {
+                $str .= $k . '=' . $v . '&';
+            }
         }
-        $str = rtrim($str, '&') . $this->apiSecret;
-        return md5($str);
+        $str = rtrim($str, '&');
+        
+        // 使用SPK生成签名
+        return md5($str . $this->apiSecret);
     }
     
     /**
@@ -359,4 +384,193 @@ class JiShareDomainSDK
         ];
     }
 
+    /**
+     * 获取SSO授权页面URL
+     * @param string $callback_url 回调地址
+     * @param string $state 状态参数，用于防止CSRF攻击
+     * @return array [状态码, 消息, 数据]
+     */
+    public function getSSOAuthorizationUrl($callback_url, $state = null, $rawResponse = false)
+    {
+        $params = [
+            'callback_url' => $callback_url,
+            'timestamp' => time()
+        ];
+        
+        if ($state !== null) {
+            $params['state'] = $state;
+        }
+        
+        $sign = $this->generateSign($params);
+        
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $this->apiUrl . '/sso/authorization');
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($params));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'X-API-KEY: ' . $this->apiKey,
+            'X-API-SIGN: ' . $sign,
+            'Content-Type: application/x-www-form-urlencoded'
+        ]);
+        
+        $response = curl_exec($ch);
+        curl_close($ch);
+        
+        if($rawResponse) {
+            return $response;
+        }
+        
+        if($response === false) {
+            return [1, 'API请求失败', null];
+        }
+        
+        $result = json_decode($response, true);
+        if(!$result) {
+            return [1, '解析响应失败', null];
+        }
+        
+        return [
+            $result['status'],
+            $result['message'],
+            isset($result['data']) ? $result['data'] : null
+        ];
+    }
+
+    /**
+     * 验证SSO回调
+     * @param string $code 授权码
+     * @param string $state 状态参数
+     * @return array [状态码, 消息, 数据]
+     */
+    public function verifySSOCallback($code, $state = null, $rawResponse = false)
+    {
+        $params = [
+            'code' => $code,
+            'timestamp' => time()
+        ];
+        
+        if ($state !== null) {
+            $params['state'] = $state;
+        }
+        
+        // 生成签名
+        $sign = $this->generateSign($params);
+        
+        // 记录调试信息
+        $debug = [
+            'params' => $params,
+            'sign_string' => http_build_query($params) . $this->apiSecret,
+            'generated_sign' => $sign,
+            'api_key' => $this->apiKey,
+            'api_url' => $this->apiUrl
+        ];
+        
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $this->apiUrl . '/sso/verify');
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($params));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'X-API-KEY: ' . $this->apiKey,
+            'X-API-SIGN: ' . $sign,
+            'Content-Type: application/x-www-form-urlencoded'
+        ]);
+        
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+        
+        if($rawResponse) {
+            return $response;
+        }
+        
+        if($response === false) {
+            return [1, 'API请求失败', array_merge(['error' => $error], $debug)];
+        }
+        
+        $result = json_decode($response, true);
+        if(!$result) {
+            return [1, '解析响应失败', array_merge([
+                'response' => $response,
+                'http_code' => $httpCode,
+                'error' => $error
+            ], $debug)];
+        }
+        
+        // 如果验证失败，返回调试信息
+        if($result['status'] !== 0) {
+            return [
+                $result['status'],
+                $result['message'],
+                array_merge($result['data'] ?? [], $debug)
+            ];
+        }
+        
+        return [
+            $result['status'],
+            $result['message'],
+            isset($result['data']) ? $result['data'] : null
+        ];
+    }
+
+    /**
+     * 获取SSO自动登录URL
+     * @param string $callback_url 回调地址
+     * @param string $state 状态参数，用于防止CSRF攻击
+     * @return array [状态码, 消息, 数据]
+     */
+    public function getSSOAutoLoginUrl($callback_url, $state = null, $rawResponse = false)
+    {
+        $params = [
+            'callback_url' => $callback_url,
+            'timestamp' => time()
+        ];
+        
+        if ($state !== null) {
+            $params['state'] = $state;
+        }
+        
+        $sign = $this->generateSign($params);
+        
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $this->apiUrl . '/sso/authorization/auto');
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($params));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'X-API-KEY: ' . $this->apiKey,
+            'X-API-SIGN: ' . $sign,
+            'Content-Type: application/x-www-form-urlencoded'
+        ]);
+        
+        $response = curl_exec($ch);
+        curl_close($ch);
+        
+        if($rawResponse) {
+            return $response;
+        }
+        
+        if($response === false) {
+            return [1, 'API请求失败', null];
+        }
+        
+        $result = json_decode($response, true);
+        if(!$result) {
+            return [1, '解析响应失败', null];
+        }
+        
+        return [
+            $result['status'],
+            $result['message'],
+            isset($result['data']) ? $result['data'] : null
+        ];
+    }
 } 
